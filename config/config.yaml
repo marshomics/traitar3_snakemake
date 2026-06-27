@@ -1,0 +1,83 @@
+# =============================================================================
+# traitar3-smk configuration
+# =============================================================================
+# Input: a directory of amino-acid FASTA files, one per genome, already called
+# with Prodigal (or any gene caller). Each *.faa file becomes one sample; the
+# sample name is the filename with the extension stripped (sanitised to
+# [A-Za-z0-9._-]).
+#
+# Override sample discovery by pointing `samples_tsv` at a 2-column TSV with a
+# header `sample<TAB>faa` (absolute or relative paths) — useful when the .faa
+# files live in many directories.
+# -----------------------------------------------------------------------------
+
+input_dir: "test/faa"        # directory scanned for *.faa
+faa_extension: ".faa"        # files matched as <input_dir>/*<faa_extension>
+samples_tsv: ""              # optional override (TSV: sample<TAB>faa). "" = glob input_dir
+
+outdir: "results"
+
+# --- phenotype models --------------------------------------------------------
+# Shipped in resources/models/. `primary` = phypat, `secondary` = phypat+PGL.
+# The combined 0/1/2/3 calls require both. To run a single model, delete the
+# secondary entry (the workflow then emits only that model's tables).
+models:
+  - name: "phypat"
+    token: "phypat"
+    archive: "resources/models/phypat.tar.gz"
+    role: "primary"
+  - name: "phypat+PGL"
+    token: "phypatPGL"
+    archive: "resources/models/phypat+PGL.tar.gz"
+    role: "secondary"
+
+# --- Pfam HMM database -------------------------------------------------------
+# The shipped models were trained on Pfam-A 27.0. Using a different Pfam release
+# changes accessions/thresholds and therefore predictions — keep 27.0.
+pfam:
+  url: "https://ftp.ebi.ac.uk/pub/databases/Pfam/releases/Pfam27.0/Pfam-A.hmm.gz"
+  hmm: "resources/pfam/Pfam-A.hmm"     # downloaded + gunzipped here
+  subset: true                          # build a reduced HMM with only the ~3,400 Pfam
+                                         # families that carry non-zero predictor weight
+                                         # (of 14,831 in Pfam 27.0). Predictions are
+                                         # identical -- a zero-weight family cannot change
+                                         # a linear decision -- and hmmsearch scans ~4x
+                                         # fewer profiles. Set false to search full Pfam-A.
+  subset_hmm: "results/db/Pfam-A.model-subset.hmm"
+
+# --- annotation hit filtering (traitar's Pfam thresholds) --------------------
+filter:
+  evalue_max: 0.01     # max independent-domain i-Evalue
+  score_min: 25        # min domain bit score
+
+# --- prediction --------------------------------------------------------------
+predict:
+  voters: 5
+  # Minimum positive votes for a majority call. floor(k/2)+1 = 3 is a true
+  # majority of 5 and reproduces the reference outputs shipped with traitar.
+  # Set to 3.5 to reproduce traitar3's literal `>= k/2 + 1` (a Py2->3 division
+  # regression that requires 4 of 5).
+  majority_threshold: 3
+
+# --- batching ----------------------------------------------------------------
+# Genomes are annotated one per job (max parallelism); prediction/merge run on
+# batches of this many genomes so the model is loaded once per batch rather than
+# once per genome. 1000-5000 is a good range.
+batch_size: 2000
+
+# --- tool parameters ---------------------------------------------------------
+hmmsearch:
+  threads: 4
+  extra: "--cut_ga --notextw"
+
+# --- per-rule cluster resources (used by the SGE profile) --------------------
+# mem_mb is the TOTAL job memory; the SGE wrapper divides by threads for h_vmem.
+# runtime is in minutes. Tune `annotate` to your genomes: with subset=true a
+# ~3 Mb proteome is a few minutes; against full Pfam-A budget ~10-15 min.
+resources:
+  annotate:    {mem_mb: 4000, runtime: 60}
+  predict:     {mem_mb: 8000, runtime: 60}
+  gather:      {mem_mb: 8000, runtime: 60}
+  merge:       {mem_mb: 8000, runtime: 60}
+  download:    {mem_mb: 2000, runtime: 240}
+  subset_db:   {mem_mb: 4000, runtime: 120}

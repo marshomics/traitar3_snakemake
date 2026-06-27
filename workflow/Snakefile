@@ -1,0 +1,35 @@
+# =============================================================================
+# traitar3-smk : a Snakemake reimplementation of the traitar3 `from_genes`
+# phenotype pipeline, designed to scale to hundreds of thousands of genomes.
+#
+#   *.faa  --hmmsearch(Pfam-A)-->  filtered best hits  -->  per-genome Pfam
+#   counts  --(batched)-->  phypat & phypat+PGL majority-vote prediction
+#   -->  gather  -->  combined 0/1/2/3 calls
+#
+# Run from the repository root:
+#   snakemake --use-conda --cores 8                       # local
+#   snakemake --use-conda --workflow-profile profiles/sge # SGE cluster
+# =============================================================================
+configfile: "config/config.yaml"
+
+
+include: "rules/common.smk"
+include: "rules/download.smk"
+include: "rules/annotate.smk"
+include: "rules/predict.smk"
+
+
+localrules:
+    batch_counts_manifest,
+    gather_manifest,
+
+
+rule all:
+    input:
+        final_targets(),
+
+
+onstart:
+    print(f"[traitar3-smk] {N_SAMPLES} genomes in {N_BATCHES} batch(es) of "
+          f"<= {BATCH_SIZE}; models: {', '.join(TOKEN2NAME.values())}; "
+          f"HMM db: {HMM_DB}")

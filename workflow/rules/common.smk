@@ -1,0 +1,105 @@
+# Sample discovery, model bookkeeping and shared helpers.
+import os
+import re
+import glob
+import csv
+import math
+
+
+def _sanitize(name: str) -> str:
+    """traitar-style sample-name sanitisation: keep [A-Za-z0-9._-], replace rest."""
+    return re.sub(r"[^A-Za-z0-9._-]", "_", name)
+
+
+def _discover_samples(cfg):
+    """Return {sample_name: faa_path}, from samples_tsv if given, else by glob."""
+    mapping = {}
+    tsv = cfg.get("samples_tsv") or ""
+    if tsv:
+        with open(tsv) as fh:
+            reader = csv.DictReader(fh, delimiter="\t")
+            if reader.fieldnames is None or "sample" not in reader.fieldnames or "faa" not in reader.fieldnames:
+                raise WorkflowError("samples_tsv must have a header with columns: sample<TAB>faa")
+            for row in reader:
+                s = _sanitize(row["sample"].strip())
+                _add_sample(mapping, s, row["faa"].strip())
+    else:
+        ext = cfg["faa_extension"]
+        pattern = os.path.join(cfg["input_dir"], "*" + ext)
+        for path in sorted(glob.glob(pattern)):
+            s = _sanitize(os.path.basename(path)[: -len(ext)] if path.endswith(ext)
+                          else os.path.splitext(os.path.basename(path))[0])
+            _add_sample(mapping, s, path)
+    if not mapping:
+        raise WorkflowError(
+            "No input genomes found. Set config['input_dir']/faa_extension (or "
+            "samples_tsv) so that at least one .faa file is discovered."
+        )
+    return mapping
+
+
+def _add_sample(mapping, sample, faa):
+    if sample in mapping and mapping[sample] != faa:
+        raise WorkflowError(
+            f"Two input files map to the same sample name '{sample}': "
+            f"{mapping[sample]} and {faa}. Rename one or use samples_tsv."
+        )
+    mapping[sample] = faa
+
+
+# --- resolve config ----------------------------------------------------------
+OUT = config["outdir"]
+
+SAMPLE2FAA = _discover_samples(config)
+SAMPLES = sorted(SAMPLE2FAA)
+N_SAMPLES = len(SAMPLES)
+
+BATCH_SIZE = int(config["batch_size"])
+N_BATCHES = max(1, math.ceil(N_SAMPLES / BATCH_SIZE))
+BATCHES = {b: SAMPLES[b * BATCH_SIZE:(b + 1) * BATCH_SIZE] for b in range(N_BATCHES)}
+
+MODELS = config["models"]
+TOKENS = [m["token"] for m in MODELS]
+TOKEN2ARCHIVE = {m["token"]: m["archive"] for m in MODELS}
+TOKEN2NAME = {m["token"]: m["name"] for m in MODELS}
+PRIMARY = next((m for m in MODELS if m.get("role") == "primary"), MODELS[0])
+SECONDARY = next((m for m in MODELS if m.get("role") == "secondary"), None)
+HAS_SECONDARY = SECONDARY is not None
+
+# database the annotation step searches against (full Pfam-A or model subset)
+HMM_DB = config["pfam"]["subset_hmm"] if config["pfam"]["subset"] else config["pfam"]["hmm"]
+
+VOTE_TYPES = ["single_votes", "majority_vote"]
+
+
+def counts_path(sample):
+    return f"{OUT}/counts/{sample}.pfam_counts.tsv"
+
+
+def res(rule_name, key):
+    """Look up a per-rule resource value from config['resources']."""
+    return config["resources"][rule_name][key]
+
+
+def final_targets():
+    targets = []
+    # per-model gathered tables (always produced)
+    for tok in TOKENS:
+        for vt in VOTE_TYPES:
+            targets.append(f"{OUT}/predict/{tok}.{vt}.tsv")
+    # combined calls when a secondary model is configured
+    if HAS_SECONDARY:
+        targets += [
+            f"{OUT}/predictions_majority-vote_combined.tsv",
+            f"{OUT}/predictions_single-votes_combined.tsv",
+            f"{OUT}/predictions_flat_majority-votes_combined.tsv",
+            f"{OUT}/predictions_flat_single-votes_combined.tsv",
+        ]
+    return targets
+
+
+wildcard_constraints:
+    sample=r"[A-Za-z0-9._-]+",
+    batch=r"\d+",
+    token=r"[A-Za-z0-9]+",
+    vt=r"single_votes|majority_vote",
