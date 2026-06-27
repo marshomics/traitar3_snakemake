@@ -13,26 +13,6 @@ so a model is loaded once per batch instead of once per genome. This replaces
 traitar3's single-process design, whose in-memory `genomes x ~14,800-Pfam`
 matrix and per-cell pandas aggregation don't survive 300k genomes.
 
-## Why this is faithful (and where it deviates on purpose)
-
-The annotation, counting, prediction math, and the phypat/phypat+PGL merge are
-ported directly from traitar3's own code. Validation against the repo's bundled
-reference data (`test/run_offline_check.sh`):
-
-- per-genome Pfam counts reproduce traitar's `summary.dat` exactly;
-- per-model votes reproduce the decision values in traitar's committed
-  `predictions_raw.txt` exactly;
-- the combined majority-vote calls reproduce `predictions_majority-vote_combined.txt`
-  exactly.
-
-One deliberate deviation: traitar3's literal Python-3 code sets the majority cutoff
-to `votes >= k/2 + 1`, which for `k=5` is `>= 3.5` (4 of 5 voters) — a regression
-introduced when integer division (`/`) changed meaning from Python 2. The original
-traitar and traitar3's own reference outputs use a true majority of `>= 3`. The
-default here is `>= 3` (`config: predict.majority_threshold`); set it to `3.5`
-(or pass `--literal-traitar3` to the predict script) to reproduce traitar3's
-literal numbers.
-
 ## Layout
 
 ```
