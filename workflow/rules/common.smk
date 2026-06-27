@@ -71,6 +71,9 @@ HMM_DB = config["pfam"]["subset_hmm"] if config["pfam"]["subset"] else config["p
 
 VOTE_TYPES = ["single_votes", "majority_vote"]
 
+# named binary call sets derived from the combined 0/1/2/3 matrix (needs both models)
+DERIVED = dict(config.get("derived_call_sets", {})) if HAS_SECONDARY else {}
+
 
 def counts_path(sample):
     return f"{OUT}/counts/{sample}.pfam_counts.tsv"
@@ -95,6 +98,10 @@ def final_targets():
             f"{OUT}/predictions_flat_majority-votes_combined.tsv",
             f"{OUT}/predictions_flat_single-votes_combined.tsv",
         ]
+        # derived binary call sets (e.g. the phypat+PGL "reliable" set)
+        for name in DERIVED:
+            targets.append(f"{OUT}/predictions_{name}.tsv")
+            targets.append(f"{OUT}/predictions_{name}_flat.tsv")
     return targets
 
 
@@ -103,3 +110,4 @@ wildcard_constraints:
     batch=r"\d+",
     token=r"[A-Za-z0-9]+",
     vt=r"single_votes|majority_vote",
+    name=r"[A-Za-z0-9_]+",

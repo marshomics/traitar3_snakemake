@@ -13,6 +13,26 @@ so a model is loaded once per batch instead of once per genome. This replaces
 traitar3's single-process design, whose in-memory `genomes x ~14,800-Pfam`
 matrix and per-cell pandas aggregation don't survive 300k genomes.
 
+## Why this is faithful (and where it deviates on purpose)
+
+The annotation, counting, prediction math, and the phypat/phypat+PGL merge are
+ported directly from traitar3's own code. Validation against the repo's bundled
+reference data (`test/run_offline_check.sh`):
+
+- per-genome Pfam counts reproduce traitar's `summary.dat` exactly;
+- per-model votes reproduce the decision values in traitar's committed
+  `predictions_raw.txt` exactly;
+- the combined majority-vote calls reproduce `predictions_majority-vote_combined.txt`
+  exactly.
+
+One deliberate deviation: traitar3's literal Python-3 code sets the majority cutoff
+to `votes >= k/2 + 1`, which for `k=5` is `>= 3.5` (4 of 5 voters) — a regression
+introduced when integer division (`/`) changed meaning from Python 2. The original
+traitar and traitar3's own reference outputs use a true majority of `>= 3`. The
+default here is `>= 3` (`config: predict.majority_threshold`); set it to `3.5`
+(or pass `--literal-traitar3` to the predict script) to reproduce traitar3's
+literal numbers.
+
 ## Layout
 
 ```
@@ -40,6 +60,36 @@ conda activate smk
 Each rule pulls its own tools (HMMER, pandas, numpy) from
 `workflow/envs/traitar3.yaml` when you pass `--use-conda`, so nothing else needs
 installing by hand.
+
+## Pre-build the conda environment (before submitting to the cluster)
+
+Compute nodes often have no internet, so build the environment once on the login
+node and let the jobs reuse it. The workflow defines a single env
+(`workflow/envs/traitar3.yaml`: HMMER, numpy, pandas).
+
+```bash
+# on the login node, from the repo root
+snakemake --use-conda --conda-create-envs-only --conda-frontend mamba --cores 4
+```
+
+This creates the env under `.snakemake/conda/` (a content hash of the YAML). Jobs
+find it by that same hash, so as long as you submit from the same repo directory
+on the shared filesystem, the compute nodes reuse it and never touch the network.
+To keep envs in a stable shared location instead, add the same
+`--conda-prefix /shared/path/conda-envs` to both this command and the run.
+
+While you're on the login node, also pre-stage the database (the `download_pfam`
+rule needs internet too):
+
+```bash
+snakemake --use-conda --cores 4 results/db/Pfam-A.model-subset.hmm
+```
+
+Then submit; everything is already built, so jobs run offline:
+
+```bash
+snakemake --use-conda --workflow-profile profiles/sge
+```
 
 ## Check it works (no database needed)
 
@@ -82,6 +132,10 @@ model subset once; both are reused thereafter.
   `0` negative, `1` phypat only, `2` phypat+PGL only, `3` both.
 - `predictions_single-votes_combined.tsv` — summed vote counts (0–10).
 - `predictions_flat_*_combined.tsv` — long-format, one non-zero call per row.
+- `predictions_reliable.tsv` — genomes x 67, `1` where phypat+PGL called the trait
+  positive (combined code 2 or 3), the paper's "reliable" set; `predictions_reliable_flat.tsv`
+  is the tidy list of those calls. Add more sets (e.g. `strict: [3]`) under
+  `derived_call_sets` in `config.yaml`.
 - `predict/phypat.{single_votes,majority_vote}.tsv` and the `phypatPGL`
   equivalents — per-model tables.
 - `counts/<sample>.pfam_counts.tsv` — per-genome Pfam presence (sparse).

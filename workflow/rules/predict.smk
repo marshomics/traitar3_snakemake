@@ -97,3 +97,21 @@ if HAS_SECONDARY:
             "--secondary-majority {input.smaj} --secondary-single {input.ssv} "
             "--primary-name '{params.pname}' --secondary-name '{params.sname}' "
             "--out-dir {params.out_dir}"
+
+    rule derive_calls:
+        """Emit a binary call set (e.g. the phypat+PGL 'reliable' set) from the
+        combined 0/1/2/3 matrix. `name` and its codes come from config:derived_call_sets."""
+        input:
+            combined=f"{OUT}/predictions_majority-vote_combined.tsv",
+        output:
+            matrix=f"{OUT}/predictions_{{name}}.tsv",
+            long=f"{OUT}/predictions_{{name}}_flat.tsv",
+        conda:
+            "../envs/traitar3.yaml"
+        params:
+            codes=lambda wc: ",".join(str(c) for c in DERIVED[wc.name]),
+            name=lambda wc: wc.name,
+        shell:
+            "python workflow/scripts/derive_calls.py --combined {input.combined} "
+            "--codes {params.codes} --out {output.matrix} --out-long {output.long} "
+            "--name {params.name}"

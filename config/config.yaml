@@ -59,6 +59,16 @@ predict:
   # regression that requires 4 of 5).
   majority_threshold: 3
 
+# --- derived call sets -------------------------------------------------------
+# Binary genome x trait tables derived from the combined 0/1/2/3 matrix. Each
+# named set writes results/predictions_<name>.tsv (+ _<name>_flat.tsv), with 1
+# where the combined code is in the listed set. Codes: 1=phypat only,
+# 2=phypat+PGL only, 3=both. Requires both models (a combined matrix).
+derived_call_sets:
+  reliable: [2, 3]      # phypat+PGL-supported (the paper's "reliable" set)
+  # strict: [3]         # both models agree (highest precision)
+  # sensitive: [1, 3]   # phypat-supported (higher recall)
+
 # --- batching ----------------------------------------------------------------
 # Genomes are annotated one per job (max parallelism); prediction/merge run on
 # batches of this many genomes so the model is loaded once per batch rather than
