@@ -13,9 +13,9 @@
 
 input_dir: "test/faa"        # directory scanned for *.faa
 faa_extension: ".faa"        # files matched as <input_dir>/*<faa_extension>
-samples_tsv: ""              # optional override (TSV: sample<TAB>faa). "" = glob input_dir
+samples_tsv: "/ebio/abt3_scratch/jmarsh/software/traitar/traitar3_snakemake/faa_sample_table.tsv"              # optional override (TSV: sample<TAB>faa). "" = glob input_dir
 
-outdir: "results"
+outdir: "/ebio/abt3_scratch/jmarsh/software/traitar/traitar3_snakemake/results"
 
 # --- phenotype models --------------------------------------------------------
 # Shipped in resources/models/. `primary` = phypat, `secondary` = phypat+PGL.
@@ -58,13 +58,6 @@ predict:
   # Set to 3.5 to reproduce traitar3's literal `>= k/2 + 1` (a Py2->3 division
   # regression that requires 4 of 5).
   majority_threshold: 3
-
-# --- flat (long-format) outputs ----------------------------------------------
-# predictions_flat_*_combined.tsv list every non-zero call as one row. The
-# single-votes flat is tens of millions of rows / several GB at hundreds of
-# thousands of genomes. Set false to write header-only placeholders and skip
-# that cost; the matrix outputs (predictions_*_combined.tsv) are unaffected.
-write_flat: true
 
 # --- derived call sets -------------------------------------------------------
 # Binary genome x trait tables derived from the combined 0/1/2/3 matrix. Each

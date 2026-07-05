@@ -149,6 +149,12 @@ model subset once; both are reused thereafter.
   `derived_call_sets` in `config.yaml`.
 - `predict/phypat.{single_votes,majority_vote}.tsv` and the `phypatPGL`
   equivalents — per-model tables.
+- `per_genome/<sample>.majority_vote.tsv` — one majority-vote file per genome
+  (phenotype, category, phypat, phypat+PGL, combined 0/1/2/3), enabled by default
+  via the `per_genome:` block in config. Written from the per-batch prediction
+  tables in parallel; additive, so the combined matrix above is still produced.
+  Set `per_genome.shard_by_batch: true` to spread the files into per-batch
+  subdirectories if one directory of 340k files is awkward on your filesystem.
 - `counts/<sample>.pfam_counts.tsv` — per-genome Pfam presence (sparse).
 - `plots/*.png` and `plots/*.svg` — publication figures (see below); SVG text is
   editable in Illustrator/Inkscape. `qc/annotation_stats.tsv` holds the

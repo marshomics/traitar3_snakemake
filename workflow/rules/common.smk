@@ -87,6 +87,11 @@ BIO_FIGS = ["bio_prevalence_by_category", "bio_trait_cooccurrence", "bio_key_tra
 ALL_FIGS = QC_FIGS + SUMMARY_FIGS + BIO_FIGS
 PRIMARY_ARCHIVE = TOKEN2ARCHIVE[PRIMARY["token"]]
 
+# --- per-genome majority-vote output -----------------------------------------
+_PG_CFG = config.get("per_genome", {})
+PER_GENOME_ENABLED = bool(_PG_CFG.get("enabled", False)) and HAS_SECONDARY
+PER_GENOME_SHARD = bool(_PG_CFG.get("shard_by_batch", False))
+
 # named binary call sets derived from the combined 0/1/2/3 matrix (needs both models)
 DERIVED = dict(config.get("derived_call_sets", {})) if HAS_SECONDARY else {}
 
@@ -123,6 +128,10 @@ def final_targets():
         for fig in ALL_FIGS:
             for fmt in PLOT_FORMATS:
                 targets.append(f"{PLOTS_DIR}/{fig}.{fmt}")
+    # one majority-vote file per genome (tracked via per-batch sentinels)
+    if PER_GENOME_ENABLED:
+        for b in range(N_BATCHES):
+            targets.append(f"{OUT}/per_genome_markers/batch_{b}.done")
     return targets
 
 
