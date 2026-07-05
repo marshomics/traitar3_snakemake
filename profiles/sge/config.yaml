@@ -1,48 +1,37 @@
-# Snakemake (>=8) workflow profile for SGE / Univa Grid Engine.
+# Snakemake 7 profile for SGE / UGE (built-in generic cluster support).
 #
-# Requires the cluster-generic executor plugin in the environment that runs
-# snakemake:
-#   pip install snakemake-executor-plugin-cluster-generic
+# Run on Snakemake 7 with --profile (NOT --workflow-profile, which mishandles
+# profile script paths in v7):
 #
-# Submit with:
+#   snakemake --use-conda --profile profiles/sge
+#
+# Snakemake 8+ instead reads config.v8+.yaml in this directory; on v8 use
 #   snakemake --use-conda --workflow-profile profiles/sge
 #
-# The submit wrapper maps Snakemake resources onto qsub:
-#   threads          -> -pe $SGE_PE <threads>   (parallel environment, default "smp")
-#   resources.mem_mb -> -l h_vmem=<mem_mb/threads>M   (SGE h_vmem is per slot)
-#   resources.runtime-> -l h_rt=HH:MM:SS         (minutes -> wallclock)
-# Override the parallel environment name if your cluster doesn't call it "smp":
-#   SGE_PE=threads snakemake ... --workflow-profile profiles/sge
+# Script names below are bare on purpose: Snakemake resolves them inside this
+# profile directory. SGE h_vmem is per-slot, so the submit wrapper divides
+# mem_mb by threads and converts runtime to HH:MM:SS. Override the parallel
+# environment name if yours isn't "smp":  SGE_PE=threads snakemake ...
 
-executor: cluster-generic
+cluster: "bash profiles/sge/sge-submit.sh --rule {rule} --threads {threads} --mem-mb {resources.mem_mb} --runtime {resources.runtime}"
+cluster-status: "bash profiles/sge/sge-status.sh"
+cluster-cancel: "qdel"
 
-cluster-generic-submit-cmd: >-
-  profiles/sge/sge-submit.sh
-  --rule {rule}
-  --threads {threads}
-  --mem-mb {resources.mem_mb}
-  --runtime {resources.runtime}
-cluster-generic-status-cmd: "profiles/sge/sge-status.sh"
-cluster-generic-cancel-cmd: "qdel"
+jobs: 500
+default-resources:
+  - mem_mb=4000
+  - runtime=60
 
-# concurrency / robustness
-jobs: 500                       # max simultaneously queued/running cluster jobs
+restart-times: 2
 max-jobs-per-second: 10
 max-status-checks-per-second: 5
-latency-wait: 60                # tolerate slow shared-FS appearance of outputs
-restart-times: 2                # retry a failed job up to twice
+latency-wait: 60
 rerun-incomplete: true
-keep-going: true                # don't abort the whole run on one genome's failure
+keep-going: true
 printshellcmds: true
 use-conda: true
 # Pre-build the env on the login node first (compute nodes are often offline):
 #   snakemake --use-conda --conda-create-envs-only --conda-frontend mamba --cores 4
-# To store envs in a fixed shared location, uncomment this on BOTH that command
-# and the cluster run (otherwise the default .snakemake/conda under the repo is used):
+# For a fixed shared env location, add the SAME --conda-prefix to that command and
+# the run (or uncomment below):
 # conda-prefix: /shared/path/to/conda-envs
-
-# default resources for rules that don't set them (also guarantees the submit
-# wrapper always receives mem_mb / runtime)
-default-resources:
-  mem_mb: 4000
-  runtime: 60

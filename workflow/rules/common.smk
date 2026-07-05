@@ -71,6 +71,9 @@ HMM_DB = config["pfam"]["subset_hmm"] if config["pfam"]["subset"] else config["p
 
 VOTE_TYPES = ["single_votes", "majority_vote"]
 
+# write full long-format flat files, or header-only placeholders (they are huge)
+WRITE_FLAT = bool(config.get("write_flat", True))
+
 # named binary call sets derived from the combined 0/1/2/3 matrix (needs both models)
 DERIVED = dict(config.get("derived_call_sets", {})) if HAS_SECONDARY else {}
 

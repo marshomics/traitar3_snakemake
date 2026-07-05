@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import os
 
+import numpy as np
 import pandas as pd
 
 
@@ -58,19 +59,35 @@ def combine_single(s1: pd.DataFrame, s2: pd.DataFrame) -> pd.DataFrame:
     return S1 + S2
 
 
-def flatten(df1: pd.DataFrame, df2: pd.DataFrame, name1: str, name2: str, out: str) -> None:
-    rows = []
-    genomes = list(df1.index) + [i for i in df2.index if i not in set(df1.index)]
-    phenos = sorted(set(df1.columns) | set(df2.columns))
-    for g in genomes:
-        for p in phenos:
-            if g in df1.index and p in df1.columns and df1.loc[g, p] != 0:
-                rows.append((g, p, df1.loc[g, p], name1))
-            if g in df2.index and p in df2.columns and df2.loc[g, p] != 0:
-                rows.append((g, p, df2.loc[g, p], name2))
-    pd.DataFrame(rows, columns=["sample", "phenotype", "score", "phenotype_model"]).to_csv(
-        out, sep="\t", index=False
-    )
+def _long_nonzero(df: pd.DataFrame, name: str) -> pd.DataFrame:
+    """Every non-zero cell of df as rows (sample, phenotype, score, model).
+
+    Vectorised with numpy.nonzero instead of a per-cell .loc loop, so it stays
+    fast at hundreds of thousands of genomes (the loop version is ~O(genomes x
+    phenotypes) label lookups and does not scale).
+    """
+    vals = df.to_numpy()
+    r, c = np.nonzero(vals)
+    return pd.DataFrame({
+        "sample": np.asarray(df.index)[r],
+        "phenotype": np.asarray(df.columns)[c],
+        "score": vals[r, c],
+        "phenotype_model": name,
+    })
+
+
+_FLAT_COLS = ["sample", "phenotype", "score", "phenotype_model"]
+
+
+def flatten(df1: pd.DataFrame, df2: pd.DataFrame, name1: str, name2: str,
+            out: str, full: bool = True) -> None:
+    if not full:
+        # header-only placeholder so the declared output still exists
+        pd.DataFrame(columns=_FLAT_COLS).to_csv(out, sep="\t", index=False)
+        return
+    long = pd.concat([_long_nonzero(df1, name1), _long_nonzero(df2, name2)],
+                     ignore_index=True)
+    long.to_csv(out, sep="\t", index=False)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -83,6 +100,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--primary-name", default="phypat")
     ap.add_argument("--secondary-name", default="phypat+PGL")
     ap.add_argument("--out-dir", required=True)
+    ap.add_argument("--no-flat", action="store_true",
+                    help="write header-only placeholders for the long-format flat "
+                         "files instead of the full tables (the single-votes flat is "
+                         "tens of millions of rows / several GB at many genomes)")
     args = ap.parse_args(argv)
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -93,10 +114,11 @@ def main(argv: list[str] | None = None) -> int:
     combine_majority(m1_maj, m2_maj).to_csv(out, sep="\t")
     out = os.path.join(args.out_dir, "predictions_single-votes_combined.tsv")
     combine_single(m1_sv, m2_sv).to_csv(out, sep="\t")
+    full = not args.no_flat
     flatten(m1_maj, m2_maj, args.primary_name, args.secondary_name,
-            os.path.join(args.out_dir, "predictions_flat_majority-votes_combined.tsv"))
+            os.path.join(args.out_dir, "predictions_flat_majority-votes_combined.tsv"), full=full)
     flatten(m1_sv, m2_sv, args.primary_name, args.secondary_name,
-            os.path.join(args.out_dir, "predictions_flat_single-votes_combined.tsv"))
+            os.path.join(args.out_dir, "predictions_flat_single-votes_combined.tsv"), full=full)
     return 0
 
 

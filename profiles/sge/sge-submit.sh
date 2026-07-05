@@ -47,6 +47,7 @@ if [[ "$THREADS" -gt 1 ]]; then
 fi
 
 jobid=$(qsub -terse -cwd -V \
+    -v OPENBLAS_NUM_THREADS=1,OMP_NUM_THREADS=1,MKL_NUM_THREADS=1,NUMEXPR_NUM_THREADS=1 \
     -N "smk.${RULE}" \
     "${PE_ARG[@]}" \
     -l h_vmem="${MEM_PER_SLOT}M" \

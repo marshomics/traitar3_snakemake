@@ -91,12 +91,13 @@ if HAS_SECONDARY:
             pname=PRIMARY["name"],
             sname=SECONDARY["name"],
             out_dir=lambda wc, output: os.path.dirname(output.maj),
+            flat_flag="" if WRITE_FLAT else "--no-flat",
         shell:
             "python workflow/scripts/merge_models.py "
             "--primary-majority {input.pmaj} --primary-single {input.psv} "
             "--secondary-majority {input.smaj} --secondary-single {input.ssv} "
             "--primary-name '{params.pname}' --secondary-name '{params.sname}' "
-            "--out-dir {params.out_dir}"
+            "--out-dir {params.out_dir} {params.flat_flag}"
 
     rule derive_calls:
         """Emit a binary call set (e.g. the phypat+PGL 'reliable' set) from the
