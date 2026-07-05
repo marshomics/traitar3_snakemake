@@ -17,11 +17,13 @@ include: "rules/common.smk"
 include: "rules/download.smk"
 include: "rules/annotate.smk"
 include: "rules/predict.smk"
+include: "rules/plots.smk"
 
 
 localrules:
     batch_counts_manifest,
     gather_manifest,
+    qc_stats_gather,
 
 
 rule all:

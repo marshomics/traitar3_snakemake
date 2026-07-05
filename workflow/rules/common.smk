@@ -74,6 +74,19 @@ VOTE_TYPES = ["single_votes", "majority_vote"]
 # write full long-format flat files, or header-only placeholders (they are huge)
 WRITE_FLAT = bool(config.get("write_flat", True))
 
+# --- figures -----------------------------------------------------------------
+_PLOTS_CFG = config.get("plots", {})
+PLOTS_ENABLED = bool(_PLOTS_CFG.get("enabled", True)) and HAS_SECONDARY
+PLOT_FORMATS = list(_PLOTS_CFG.get("formats", ["png", "svg"]))
+PLOT_DPI = int(_PLOTS_CFG.get("dpi", 600))
+PLOT_LOW_FAM = int(_PLOTS_CFG.get("low_families", 50))
+PLOTS_DIR = f"{OUT}/plots"
+QC_FIGS = ["qc_annotation_completeness", "qc_completeness_vs_calls", "qc_calls_per_genome"]
+SUMMARY_FIGS = ["summary_trait_prevalence", "summary_model_agreement", "summary_confidence"]
+BIO_FIGS = ["bio_prevalence_by_category", "bio_trait_cooccurrence", "bio_key_traits_composition"]
+ALL_FIGS = QC_FIGS + SUMMARY_FIGS + BIO_FIGS
+PRIMARY_ARCHIVE = TOKEN2ARCHIVE[PRIMARY["token"]]
+
 # named binary call sets derived from the combined 0/1/2/3 matrix (needs both models)
 DERIVED = dict(config.get("derived_call_sets", {})) if HAS_SECONDARY else {}
 
@@ -105,6 +118,11 @@ def final_targets():
         for name in DERIVED:
             targets.append(f"{OUT}/predictions_{name}.tsv")
             targets.append(f"{OUT}/predictions_{name}_flat.tsv")
+    # QC / summary / biological figures
+    if PLOTS_ENABLED:
+        for fig in ALL_FIGS:
+            for fmt in PLOT_FORMATS:
+                targets.append(f"{PLOTS_DIR}/{fig}.{fmt}")
     return targets
 
 

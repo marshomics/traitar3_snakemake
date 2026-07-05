@@ -1,0 +1,14 @@
+# SEPARATE env for the plotting/QC rules. Kept distinct from traitar3.yaml on
+# purpose: editing the annotation env would change its hash and re-trigger all
+# ~342k annotate jobs (software-env rerun trigger). Adding this new env instead
+# touches nothing upstream.
+name: traitar3-smk-plots
+channels:
+  - conda-forge
+dependencies:
+  - python >=3.9
+  - numpy >=1.21
+  - pandas >=1.3
+  - scipy >=1.7
+  - matplotlib-base >=3.6
+  - seaborn >=0.12

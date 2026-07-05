@@ -82,6 +82,16 @@ derived_call_sets:
 # once per genome. 1000-5000 is a good range.
 batch_size: 2000
 
+# --- summary figures ---------------------------------------------------------
+# QC, summary and biological figures written to results/plots/ as PNG + SVG
+# (SVG text stays editable). Every figure aggregates across genomes, so they
+# render fine at 340k proteomes. Needs both models (combined calls).
+plots:
+  enabled: true
+  formats: [png, svg]
+  dpi: 600
+  low_families: 50        # genomes with fewer annotated Pfam families are flagged in QC
+
 # --- tool parameters ---------------------------------------------------------
 hmmsearch:
   threads: 4
@@ -98,3 +108,5 @@ resources:
   merge:       {mem_mb: 8000, runtime: 60}
   download:    {mem_mb: 2000, runtime: 240}
   subset_db:   {mem_mb: 4000, runtime: 120}
+  qc_stats:    {mem_mb: 2000, runtime: 60}
+  plots:       {mem_mb: 16000, runtime: 90}

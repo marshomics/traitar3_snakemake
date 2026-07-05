@@ -13,6 +13,26 @@ so a model is loaded once per batch instead of once per genome. This replaces
 traitar3's single-process design, whose in-memory `genomes x ~14,800-Pfam`
 matrix and per-cell pandas aggregation don't survive 300k genomes.
 
+## Why this is faithful (and where it deviates on purpose)
+
+The annotation, counting, prediction math, and the phypat/phypat+PGL merge are
+ported directly from traitar3's own code. Validation against the repo's bundled
+reference data (`test/run_offline_check.sh`):
+
+- per-genome Pfam counts reproduce traitar's `summary.dat` exactly;
+- per-model votes reproduce the decision values in traitar's committed
+  `predictions_raw.txt` exactly;
+- the combined majority-vote calls reproduce `predictions_majority-vote_combined.txt`
+  exactly.
+
+One deliberate deviation: traitar3's literal Python-3 code sets the majority cutoff
+to `votes >= k/2 + 1`, which for `k=5` is `>= 3.5` (4 of 5 voters) — a regression
+introduced when integer division (`/`) changed meaning from Python 2. The original
+traitar and traitar3's own reference outputs use a true majority of `>= 3`. The
+default here is `>= 3` (`config: predict.majority_threshold`); set it to `3.5`
+(or pass `--literal-traitar3` to the predict script) to reproduce traitar3's
+literal numbers.
+
 ## Layout
 
 ```
@@ -43,9 +63,11 @@ installing by hand.
 
 ## Pre-build the conda environment (before submitting to the cluster)
 
-Compute nodes often have no internet, so build the environment once on the login
-node and let the jobs reuse it. The workflow defines a single env
-(`workflow/envs/traitar3.yaml`: HMMER, numpy, pandas).
+Compute nodes often have no internet, so build the environments once on the login
+node and let the jobs reuse them. The workflow defines two: `traitar3.yaml`
+(HMMER, numpy, pandas) for annotation and prediction, and `plots.yaml`
+(matplotlib, seaborn, scipy) for the figures. `--conda-create-envs-only` builds
+both.
 
 ```bash
 # on the login node, from the repo root
@@ -97,11 +119,20 @@ Edit `config/config.yaml`:
 # local
 snakemake --use-conda --cores 16
 
-# SGE / UGE cluster (Pfam download + subset happen automatically on first run)
-snakemake --use-conda --workflow-profile profiles/sge
+# SGE / UGE cluster (Pfam download + subset happen automatically on first run).
+# The command differs by Snakemake version (check `snakemake --version`):
+snakemake --use-conda --profile profiles/sge            # Snakemake 7
+snakemake --use-conda --workflow-profile profiles/sge   # Snakemake 8+
 #   override the parallel-environment name if yours isn't "smp":
-SGE_PE=threads snakemake --use-conda --workflow-profile profiles/sge
+SGE_PE=threads snakemake --use-conda --profile profiles/sge
+#   if mamba isn't on the cluster, add: --conda-frontend conda
 ```
+
+The `profiles/sge/` directory holds both: `config.yaml` (Snakemake 7, built-in
+`--cluster`) and `config.v8+.yaml` (Snakemake 8, the cluster-generic executor
+plugin, which needs `pip install snakemake-executor-plugin-cluster-generic`).
+Snakemake 8 picks the `v8+` file automatically. On v7 use `--profile`, not
+`--workflow-profile` (v7 mishandles profile script paths with the latter).
 
 First run downloads Pfam-A 27.0 (~1.2 GB) into `resources/pfam/` and builds the
 model subset once; both are reused thereafter.
@@ -119,6 +150,35 @@ model subset once; both are reused thereafter.
 - `predict/phypat.{single_votes,majority_vote}.tsv` and the `phypatPGL`
   equivalents — per-model tables.
 - `counts/<sample>.pfam_counts.tsv` — per-genome Pfam presence (sparse).
+- `plots/*.png` and `plots/*.svg` — publication figures (see below); SVG text is
+  editable in Illustrator/Inkscape. `qc/annotation_stats.tsv` holds the
+  per-genome QC metrics behind them.
+
+## Figures
+
+`results/plots/` holds nine figures, each as a PNG (600 DPI) + editable SVG pair,
+with auto-written captions in `plots/FIGURES.*.md`. Every figure aggregates
+across genomes (histograms, ECDFs, 2D density, per-trait bars, a 67×67
+trait-correlation heatmap), so they stay readable and cheap at 340k proteomes —
+each of the three plot jobs runs in seconds using under 1 GB of RAM.
+
+QC (annotation quality): `qc_annotation_completeness` (Pfam families, depth and
+model-feature coverage per genome), `qc_completeness_vs_calls` (density of
+coverage vs number of calls, to check calls aren't driven by sparse genomes),
+`qc_calls_per_genome` (positive traits per genome, with a zero-call flag).
+
+Summary (prediction overview): `summary_trait_prevalence` (per-trait prevalence,
+phypat vs phypat+PGL), `summary_model_agreement` (per-trait 0/1/2/3 concordance),
+`summary_confidence` (committee vote support overall and among positive calls).
+
+Biological: `bio_prevalence_by_category` (prevalence grouped by trait category),
+`bio_trait_cooccurrence` (clustered 67×67 co-occurrence heatmap), and
+`bio_key_traits_composition` (oxygen relationship, Gram stain, morphology).
+
+Toggle or tune via the `plots:` block in `config/config.yaml` (`enabled`,
+`formats`, `dpi`). The plot rules use a separate conda env
+(`workflow/envs/plots.yaml`) so they never alter the annotation env or re-trigger
+those jobs.
 
 ## Scaling to ~300k genomes
 
