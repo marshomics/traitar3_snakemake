@@ -31,7 +31,10 @@ def _read(path: str) -> pd.DataFrame:
 
 
 def _align(a: pd.DataFrame, b: pd.DataFrame):
-    idx = list(a.index) + [i for i in b.index if i not in set(a.index)]
+    # build the membership set ONCE; putting set(a.index) inside the comprehension
+    # rebuilds a 342k-element set on every iteration -> O(n^2), hours at scale.
+    a_index = set(a.index)
+    idx = list(a.index) + [i for i in b.index if i not in a_index]
     cols = sorted(set(a.columns) | set(b.columns))
     A = a.reindex(index=idx, columns=cols, fill_value=0)
     B = b.reindex(index=idx, columns=cols, fill_value=0)

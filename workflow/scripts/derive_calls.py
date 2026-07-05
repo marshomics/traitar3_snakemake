@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import os
 
+import numpy as np
 import pandas as pd
 
 
@@ -45,14 +46,14 @@ def main(argv: list[str] | None = None) -> int:
     binary.to_csv(args.out, sep="\t")
 
     if args.out_long:
-        rows = []
-        for genome in binary.index:
-            for trait in binary.columns:
-                if binary.loc[genome, trait] == 1:
-                    rows.append((genome, trait, args.name))
-        pd.DataFrame(rows, columns=["sample", "phenotype", "call_set"]).to_csv(
-            args.out_long, sep="\t", index=False
-        )
+        # vectorised: nonzero positions instead of a per-cell .loc loop (which is
+        # O(genomes x traits) label lookups -> far too slow at 340k genomes).
+        r, c = np.nonzero(binary.to_numpy() == 1)
+        pd.DataFrame({
+            "sample": np.asarray(binary.index)[r],
+            "phenotype": np.asarray(binary.columns)[c],
+            "call_set": args.name,
+        }).to_csv(args.out_long, sep="\t", index=False)
 
     n_pos = int(binary.to_numpy().sum())
     print(f"[{args.name}] codes={sorted(codes)}: {n_pos} positive calls across "

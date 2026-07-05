@@ -100,9 +100,19 @@ def counts_path(sample):
     return f"{OUT}/counts/{sample}.pfam_counts.tsv"
 
 
+_RES_DEFAULTS = {"mem_mb": 4000, "runtime": 60, "threads": 1}
+
+
 def res(rule_name, key):
-    """Look up a per-rule resource value from config['resources']."""
-    return config["resources"][rule_name][key]
+    """Per-rule resource from config['resources'], falling back to a safe default.
+
+    Never raises if a rule or key is missing from config (which would otherwise
+    break Snakefile parsing on any config/code drift).
+    """
+    entry = config.get("resources", {}).get(rule_name, {})
+    if key in entry:
+        return entry[key]
+    return _RES_DEFAULTS.get(key, 4000)
 
 
 def final_targets():
